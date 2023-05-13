@@ -98,10 +98,8 @@ crf = CRF(
     max_iterations=100,
     all_possible_transitions=True
 )
-try:
-    crf.fit(x_train, y_train)
-except AttributeError:
-    pass
+crf.fit(x_train, y_train)
+
 y_pred = crf.predict(x_test)
 
 print("F1 score on Test Data ")
