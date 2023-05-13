@@ -1,15 +1,8 @@
-# import pprint
-# import time
-import re
 import nltk
-# import numpy as np
-# import requests
-# import matplotlib.pyplot as plt
-# import seaborn as sns
 from sklearn.model_selection import train_test_split
-# from nltk.tokenize import word_tokenize
+from sklearn.metrics import classification_report
+from itertools import chain
 from sklearn_crfsuite import CRF, metrics
-# from collections import Counter
 
 from typing import Sequence
 
@@ -118,6 +111,6 @@ y_pred_train = crf.predict(x_train)
 metrics.flat_f1_score(y_train, y_pred_train, average='weighted', labels=crf.classes_)
 
 # Look at class wise score
-print(metrics.flat_classification_report(
-    y_test, y_pred, labels=crf.classes_, digits=3
+print(classification_report(
+    list(chain.from_iterable(y_test)), list(chain.from_iterable(y_pred)), labels=crf.classes_, digits=3
 ))
