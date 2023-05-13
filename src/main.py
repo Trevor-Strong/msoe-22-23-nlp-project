@@ -58,17 +58,18 @@ class Features:
     word_has_hyphen: bool
 
 
-def features(sentence, index):
-    ### sentence is of the form [w1,w2,w3,..], index is the position of the word in the sentence
+def features(sentence: Sequence[str], index: int):
+    # sentence is of the form [w1,w2,w3,..], index is the position of the word in the sentence
+    word = sentence[index]
     return {
-        'is_first_capital': int(sentence[index][0].isupper()),
+        'is_first_capital': int(word[0].isupper()),
         'is_first_word': int(index == 0),
         'is_last_word': int(index == len(sentence) - 1),
-        'is_complete_capital': int(sentence[index].upper() == sentence[index]),
-        'prev_word': '' if index == 0 else sentence[index - 1],
-        'next_word': '' if index == len(sentence) - 1 else sentence[index + 1],
+        'is_complete_capital': int(word.isupper()),  # int(word.upper() == word),
+        'prev_word': sentence[index - 1] if index else '',
+        'next_word':'' if index==len(sentence)-1 else sentence[index+1],
         'is_numeric': int(sentence[index].isdigit()),
-        'is_alphanumeric': int(bool((re.match('^(?=.*[0-9]$)(?=.*[a-zA-Z])', sentence[index])))),
+        'is_alphanumeric': sentence[index].isalnum(),  # int(bool((re.match('^(?=.*[0-9]$)(?=.*[a-zA-Z])', sentence[index])))),
         'prefix_1': sentence[index][0],
         'prefix_2': sentence[index][:2],
         'prefix_3': sentence[index][:3],
