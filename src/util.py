@@ -4,6 +4,9 @@ import nltk
 from typing import TypeVar, Sequence, Iterable, Optional, TypedDict, cast
 
 
+FILEPATH = "./model.pickle"
+
+
 BinInt = int
 
 
@@ -35,6 +38,21 @@ def three_windowed(source: Iterable[_T], /, *, default=None) -> Iterable[tuple[O
     yield prev, curr, default
 
 
+_nltk_download_logger = None
+
+
+def nltk_download(item: str):
+    global _nltk_download_logger
+
+    if _nltk_download_logger is None:
+        class LoggerFile:
+            def write(self, data):
+                logging.info(data)
+        _nltk_download_logger = LoggerFile()
+
+    nltk.download(item, print_error_to=_nltk_download_logger)
+
+
 class Features(TypedDict):
     is_first_capital: BinInt
     is_first_word: BinInt
@@ -55,7 +73,7 @@ class Features(TypedDict):
     suffix_4: str
 
 
-def features(word: str, *, prev_word: str | None, next_word: str | None) -> Features:
+def features(word: str, *, prev_word: Optional[str], next_word: Optional[str]) -> Features:
     if prev_word is None:
         prev_word = ''
 
@@ -95,7 +113,7 @@ def tokenize_text(text: str, /) -> list[list[str]]:
 
     val = [nltk.tokenize.word_tokenize(sent) for sent in sents]
 
-    logging.info("tokenize_text %s", val)
+    logging.debug("tokenize_text %s", val)
     return val
 
 

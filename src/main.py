@@ -5,14 +5,14 @@ import logging as log
 import train_model
 import sys
 from typing import Sequence
-from util import tokenize_with_features
+import util
 
 
 def _train_and_save_model() -> CRF:
     model = train_model.train()
-    log.info("Saving model to %s", train_model.FILEPATH)
+    log.info("Saving model to %s", util.FILEPATH)
     try:
-        with open(train_model.FILEPATH, "wb") as f:
+        with open(util.FILEPATH, "wb") as f:
             pickle.dump(model, f)
     except OSError as e:
         log.error("Failed to save model", exc_info=e)
@@ -26,14 +26,14 @@ def load_model() -> CRF:
         log.info("No model found, training new model...")
         model = _train_and_save_model()
     else:
-        log.info("Loading model from %s", train_model.FILEPATH)
+        log.info("Loading model from %s", util.FILEPATH)
         try:
-            with open(train_model.FILEPATH, "rb") as f:
+            with open(util.FILEPATH, "rb") as f:
                 model = pickle.load(f)
         except OSError as e:
             log.error(
                 "Failed to load model from file %s, training new model...",
-                train_model.FILEPATH,
+                util.FILEPATH,
                 exc_info=e
             )
             model = _train_and_save_model()
@@ -42,24 +42,23 @@ def load_model() -> CRF:
 
 
 def main(args: Sequence[str] = ()):
-    import nltk
-    nltk.download("punkt")
+    util.nltk_download("punkt")
 
     import pprint
     log.basicConfig(format='[{levelname}]: {message}', level=log.INFO, style='{')
     model = load_model()
     print("Write text you want the model classify")
-    try:
-        while True:
-            text = input("Input:\n")
-            tokens = tokenize_with_features(text)
-            prediction = model.predict(tokens)
-            print("Prediction:")
-            pprint.pprint(prediction)
-    except KeyboardInterrupt:
-        pass
+    while True:
+        text = input("Input:\n")
+        tokens = util.tokenize_with_features(text)
+        prediction = model.predict(tokens)
+        print("Prediction:")
+        pprint.pprint(prediction)
 
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    try:
+        main(sys.argv[1:])
+    except KeyboardInterrupt:
+        pass
 
