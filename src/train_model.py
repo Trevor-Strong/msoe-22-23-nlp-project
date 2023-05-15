@@ -5,6 +5,8 @@ from sklearn_crfsuite import CRF
 import util
 from typing import Sequence, TypedDict
 
+FILEPATH = "./model.pickle"
+
 
 TestData = list[list[str]]
 
@@ -77,7 +79,7 @@ def prep_input(usr_input: Sequence[str]) -> list[Features]:
     return out
 
 
-def main():
+def train() -> CRF:
     nltk.download('treebank')
     nltk.download('universal_tagset')
 
@@ -98,10 +100,13 @@ def main():
         all_possible_transitions=True,
     )
     crf.fit(x_train, y_train)
+    return crf
 
-    path = "model.pickle"
 
-    with open(path, "wb") as f:
+def main():
+    crf = train()
+
+    with open(FILEPATH, "wb") as f:
         pickle.dump(crf, f)
 
     # VERB - verbs (all tenses and modes)
