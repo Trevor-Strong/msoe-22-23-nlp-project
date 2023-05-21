@@ -59,8 +59,6 @@ def predict_next_pos(transition_features, pos):
 
     if max_extract:
         return max_extract[1]
-        # print(max_extract[1])
-        # print(max_extract, '->', max_value)
 
     return
 
