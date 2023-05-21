@@ -1,10 +1,12 @@
 import logging
-
-import nltk
+from pathlib import Path
 from typing import TypeVar, Sequence, Iterable, Optional, TypedDict, cast
 
+import nltk
 
-FILEPATH = "./model.pickle"
+
+PROJ_ROOT = Path(__file__).parents[1]
+MODEL_FILE = PROJ_ROOT / 'model.pickle'
 
 
 BinInt = int
@@ -36,6 +38,10 @@ def three_windowed(source: Iterable[_T], /, *, default=None) -> Iterable[tuple[O
         curr = next_item
 
     yield prev, curr, default
+
+
+def init_logging(*, level: int = logging.INFO):
+    logging.basicConfig(format='[{levelname}]: {message}', level=level, style='{')
 
 
 _nltk_download_logger = None
