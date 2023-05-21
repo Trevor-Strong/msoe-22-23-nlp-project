@@ -17,7 +17,7 @@ MODEL_FILE = util.PROJ_ROOT / 'model.pickle'
 TEST_DATA_FILE = util.PROJ_ROOT / 'test_data.pickle'
 
 
-def load(*, auto_train: bool = False, save_retrained_model: bool = True, printer=print, reader=input) -> CRF:
+def load(*, auto_train: Optional[bool] = False, save_retrained_model: bool = True, printer=print, reader=input) -> CRF:
     """
     Loads the model. If no model file is found, a model is trained
     :param auto_train: Automatically train the model if no model file is found
@@ -31,15 +31,20 @@ def load(*, auto_train: bool = False, save_retrained_model: bool = True, printer
         with util.MODEL_FILE.open(mode='rb') as f:
             return pickle.load(f)
     except (FileNotFoundError, IOError) as e:
+        log.critical("Error loading model", exc_info=e)
+
+        if auto_train is None:
+            raise
+
         if not auto_train:
             reason = "No model found" if isinstance(e, FileNotFoundError) else \
                 "Error loading model"
 
-            ans = input(f"{reason}, train new model now? [y/n]: ").strip()
+            ans = reader(f"{reason}, train new model now? [y/n]: ").strip()
             if ans.startswith(('n', 'N')):
                 raise KeyboardInterrupt()
             elif not ans.startswith(('y', 'Y')):
-                print(f"Unknown input {ans!r}, exiting")
+                printer(f"Unknown input {ans!r}, exiting")
                 exit(1)
         log.info('Training model...')
         return train(save=save_retrained_model)

@@ -143,17 +143,9 @@ def tokenize_text(text: str, /) -> list[list[str]]:
 
 
 def featurify(sentence: list[str], /) -> list[Features]:
-    """
-    Applies features to the tokens of a sentence
-    :param sentence:
-    :return: The same list object, with the tokens replaced with their features
-    """
-    last = len(sentence) - 1
-    prev_tok = None
-    out = cast(list[Features], sentence)
-    for i, tok in enumerate(sentence):
-        out[i] = features(tok, prev_word=prev_tok, next_word=None if i == last else sentence[i + 1])
-        prev_tok = tok
+    out = []
+    for prev, curr, next in three_windowed(sentence):
+        out.append(features(curr, prev_word=prev, next_word=next))
     return out
 
 

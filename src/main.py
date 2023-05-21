@@ -1,90 +1,127 @@
-from sklearn_crfsuite import CRF
-import pickle
-from pathlib import Path
-import logging as log
-import pos_model
-import sys
-from typing import Sequence
-import util
+from typing import Callable, TextIO, Sequence, Optional
+
 import numpy as np
+from sklearn_crfsuite import CRF
+
+import util
+import pos_model
+
+POS_TAGSET = {
+    'VERB': 'verb',
+    'NOUN': 'noun',
+    'PRON': 'pronoun',
+    'ADJ': 'adjective',
+    'ADV': 'adverb',
+    'ADP': 'adposition',
+    'CONJ': 'conjunction',
+    'DET': 'determiner',
+    'NUM': 'number',
+    'PRT': 'particle',
+    'X': 'foreign word, typo or an abbreviation',
+    '.': 'punctuation mark'
+}
 
 
-PartOfSpeach = str
+def nameof(pos: str) -> str:
+    return POS_TAGSET[pos]
 
 
-def predict_next_pos(transition_features: dict[tuple[str, str], float], pos: str):
-    keys = list(transition_features.keys())
-    values = list(transition_features.values())
-    sorted_value_index = np.argsort(values)
-    sorted_dict = {keys[i]: values[i] for i in sorted_value_index}
-
-    max_value = float('-inf')
-    max_extract = None
-    # return keys[sorted_value_index[-1]]
-    for extract in sorted_dict:
-        if extract[0] == pos and sorted_dict[extract] > max_value:
-            max_value = sorted_dict[extract]
-            max_extract = extract
-
-    return max_extract[1] if max_extract is not None else None
+def with_article(s: str) -> str:
+    return '{} {}'.format('an' if s.startswith(tuple('aeiouAEIOU')) else 'a', s)
 
 
-def translate(pos: PartOfSpeach):
-    tagset = {
-        'VERB': 'verb',
-        'NOUN': 'noun',
-        'PRON': 'pronoun',
-        'ADJ': 'adjective',
-        'ADV': 'adverb',
-        'ADP': 'adposition',
-        'CONJ': 'conjunction',
-        'DET': 'determiner',
-        'NUM': 'number',
-        'PRT': 'particle',
-        'X': 'foreign word, typo or an abbreviation',
-        '.': 'punctuation mark'
-    }
-
-    return tagset.get(pos, 'Unknown part of speech')
+def guess_next_pos(transition_feats: dict[tuple[str, str], float], pos: str):
+    poses = []
+    probs = []
+    for (the_pos, next_pos), prob in transition_feats.items():
+        if the_pos == pos:
+            poses.append(next_pos)
+            probs.append(prob)
+    i = np.argmax(probs)
+    # print(f"{i!r}")
+    return poses[int(i)]
 
 
-def expand_output(model: CRF,
-                  tokens: list[list[util.Features]],
-                  prediction: list[list[PartOfSpeach]]) -> str:
-    output = ""
+def display(model: CRF, text: str, writer: Callable[[str], None]):
+    tokens: list[list[str]] = util.tokenize_text(text)
+    features: list[list[pos_model.Features]] = [util.featurify(sent) for sent in tokens]
+    prediction: list[list[str]] = model.predict(features)
+    writer("Prediction: ")
 
-    i = 0
-    j = 1
-    for list in prediction:
-        for pos in list:
-            while i < (len(list) - 1):
-                output += (tokens[0][j]['prev_word'] + ", is a " + translate(list[i])
-                           + ". It is usually followed by a " +
-                           translate(predict_next_pos(model.transition_features_, list[i])) + ".\n")
-
-                i = i + 1
-                j = j + 1
-
-    return output
+    for sents in zip(tokens, prediction):
+        for i, (tok, pos) in enumerate(zip(*sents)):
+            writer("{} is a {}. It is usually followed by {}".format(
+                repr(tok),
+                nameof(pos),
+                with_article(nameof(guess_next_pos(model.transition_features_, pos)))
+            ))
 
 
-def main(args: Sequence[str] = (), printer=print, reader=input):
-    util.init_logging()
-    util.nltk_download("punkt")
+def _looping(writer: Callable[[str], None]):
     model = pos_model.load()
+    print("Write out the sentence you want classified.")
+    print("\nUse Ctl-C to exit")
 
-    print("Write text you want the model classify")
-    while True:
-        text = reader("Input:\n")
-        tokens = util.tokenize_with_features(text)
-        prediction: list[list[PartOfSpeach]] = model.predict(tokens)
-        printer("Prediction:")
-        printer(prediction)
-        printer(expand_output(model, tokens, prediction))
+    try:
+        while True:
+            text = input("> ")
+            display(model, text, writer)
+
+    except (KeyboardInterrupt, EOFError):
+        pass
+
+
+def _oneshot(reader: TextIO, writer: Callable[[str], None]):
+    model = pos_model.load()
+    with reader:
+        text = " ".join(reader.readlines())
+        display(model, text, writer)
+
+
+def main(args: Sequence[str] = None) -> None:
+    if args is None:
+        import sys
+        args = sys.argv[1:]
+
+    if not args:
+        return _looping(writer=print)
+
+    import argparse
+
+    parser = argparse.ArgumentParser(allow_abbrev=False)
+    parser.add_argument("--input",
+                        action="store",
+                        dest="reader",
+                        default=None,
+                        metavar="INPUT_FILE",
+                        help="path to the input file to read from")
+    parser.add_argument("--output",
+                        action="store",
+                        dest="writer",
+                        default=None,
+                        metavar="OUTPUT_FILE",
+                        help="Path to the output file, to write results to")
+    options = parser.parse_args(args)
+    reader: Optional[str] = options.reader
+    writer: Optional[str] = options.writer
+
+    if reader is None:
+        if writer is None:
+            return _looping(writer=print)
+
+        with open(writer, mode="wt", encoding="utf-8") as f:
+            from functools import partial
+            return _looping(writer=partial(print, file=f))
+
+    reader: TextIO = open(reader, mode="rt", encoding="utf-8")
+
+    if writer is None:
+        _oneshot(writer=print, reader=reader)
+    else:
+        with open(writer, mode="wt", encoding="utf-8") as f:
+            from functools import partial
+            return _oneshot(reader=reader, writer=partial(print, file=f))
 
 
 if __name__ == '__main__':
-    try:
-        main(sys.argv[1:])
-    except KeyboardInterrupt:
-        pass
+    main()
