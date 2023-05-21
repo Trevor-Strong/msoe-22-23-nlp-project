@@ -1,13 +1,13 @@
+import enum
 import logging
 from pathlib import Path
-from typing import TypeVar, Sequence, Iterable, Optional, TypedDict, cast
+from typing import TypeVar, Sequence, Iterable, Optional, TypedDict, cast, Generic
 
 import nltk
 
 
 PROJ_ROOT = Path(__file__).parents[1]
 MODEL_FILE = PROJ_ROOT / 'model.pickle'
-
 
 BinInt = int
 
@@ -40,21 +40,40 @@ def three_windowed(source: Iterable[_T], /, *, default=None) -> Iterable[tuple[O
     yield prev, curr, default
 
 
-def init_logging(*, level: int = logging.INFO):
-    logging.basicConfig(format='[{levelname}]: {message}', level=level, style='{')
+_logging_inited = False
+
+
+def init_logging(*, level: int = logging.INFO, expect_first: bool = False):
+    global _logging_inited
+    if _logging_inited:
+        if expect_first:
+            logging.debug("Attempted to re-initialize logging with level %(level)s",
+                          {'level': logging.getLevelName(level)})
+        return
+    _logging_inited = True
+    logging.basicConfig(format='[%(levelname)s]: %(message)s', level=level)
 
 
 _nltk_download_logger = None
 
 
-def nltk_download(item: str):
+def nltk_download(item: str, *, level: int = logging.INFO):
     global _nltk_download_logger
 
     if _nltk_download_logger is None:
+        init_logging()
+
         class LoggerFile:
-            def write(self, data):
-                logging.info(data)
-        _nltk_download_logger = LoggerFile()
+            level: int
+
+            def __init__(self, level: int):
+                self.level = level
+
+            def write(self, data: str):
+                if data.strip():  # only log if input is non-empty
+                    for line in data.splitlines():
+                        logging.log(self.level, line)
+        _nltk_download_logger = LoggerFile(level=level)
 
     nltk.download(item, print_error_to=_nltk_download_logger)
 
@@ -143,3 +162,31 @@ def tokenize_with_features(text: str, /) -> list[list[Features]]:
     for sentence in text_tokens:
         featurify(sentence)
     return cast(list[list[Features]], text_tokens)
+
+
+class POSTag(enum.Enum):
+    VERB = 'Verb'
+    NOUN = 'Noun'
+    PRON = 'Pronoun'
+    ADJ = 'Adjective'
+    ADP = 'Adposition'
+    CONJ = 'Conjunction'
+    DET = 'Determiner'
+    NUM = 'Number'
+    PRT = 'Particles'
+    X = 'Other'
+    PUNCT = 'Punctuation'
+
+    @classmethod
+    def from_str(cls, pos_tag: str):
+        if pos_tag == '.':
+            return cls.PUNCT
+        else:
+            return cls[pos_tag]
+
+
+class OutVar(Generic[_T]):
+    value: Optional[_T]
+
+    def __init__(self, default: Optional[_T] = None):
+        self.value = default

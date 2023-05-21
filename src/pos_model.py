@@ -1,25 +1,29 @@
+from os import PathLike
+
 import nltk
 import pickle
+import sklearn.metrics as metrics
 from sklearn.model_selection import train_test_split
 from sklearn_crfsuite import CRF
 import util
-from typing import Sequence
+from typing import Sequence, Optional, BinaryIO, Callable
 import logging as log
-
 Features = util.Features
 
 
-TestData = list[list[str]]
+TestData = Sequence[Sequence[tuple[str, str]]]
 
 MODEL_FILE = util.PROJ_ROOT / 'model.pickle'
-TRAINING_DATA_FILE = util.PROJ_ROOT / 'test_data.pickle'
+TEST_DATA_FILE = util.PROJ_ROOT / 'test_data.pickle'
 
 
-def load(*, auto_train: bool = False, save_retrained_model: bool = True) -> CRF:
+def load(*, auto_train: bool = False, save_retrained_model: bool = True, printer=print, reader=input) -> CRF:
     """
     Loads the model. If no model file is found, a model is trained
     :param auto_train: Automatically train the model if no model file is found
     :param save_retrained_model: Determines if a newly trained model should be saved or not
+    :param printer: `print` like function to use
+    :param reader: `input` like function to use
     :return: the model
     """
     log.info("Loading model")
@@ -64,7 +68,7 @@ def prep_input(usr_input: Sequence[str]) -> list[Features]:
     return out
 
 
-def train(*, save: bool = False) -> CRF:
+def train(*, save: bool = False, test_data: Optional[util.OutVar[TestData]] = None) -> CRF:
     util.nltk_download('treebank')
     util.nltk_download('universal_tagset')
 
@@ -94,31 +98,60 @@ def train(*, save: bool = False) -> CRF:
             log.info("Saved model")
             log.info("Saving training data to %(filename)s...", {'filename': util})
             try:
-                with open(TRAINING_DATA_FILE, 'wb') as f:
+                with open(TEST_DATA_FILE, 'wb') as f:
                     pickle.dump(test_set, file=f)
             except IOError as e:
                 log.error("Error saving training data", exc_info=e)
             else:
                 log.info("Saved training data")
 
+    if test_data is not None:
+        test_data.value = test_set
+
     return crf
 
 
-def main():
-    train(save=True)
+def _flatten(x):
+    from itertools import chain
+    return list(chain.from_iterable(x))
 
-    # VERB - verbs (all tenses and modes)
-    # NOUN - nouns (common and proper)
-    # PRON - pronouns
-    # ADJ - adjectives
-    # ADV - adverbs
-    # ADP - adpositions (prepositions and postpositions)
-    # CONJ - conjunctions
-    # DET - determiners
-    # NUM - cardinal numbers
-    # PRT - particles or other function words
-    # X - other: foreign words, typos, abbreviations
-    # . - punctuation
+
+def test(model: CRF, data: TestData = None, *,
+         printer: Callable[[str], None] = print,
+         file: BinaryIO = None,
+         path: PathLike = TEST_DATA_FILE):
+    from itertools import chain
+
+    if data is None:
+        if file is None:
+            with open(path, mode='rb') as f:
+                data = pickle.load(f)
+        else:
+            data = pickle.load(file)
+
+    features, expected = prepare_data(data)
+    actual = model.predict(features)
+
+    expected = list(chain.from_iterable(expected))
+    actual = list(chain.from_iterable(actual))
+    printer(f'F1 Score: %s' % metrics.f1_score(
+        expected,
+        actual,
+        average='weighted',
+        labels=model.classes_
+    ))
+    printer(metrics.classification_report(
+        expected,
+        actual,
+        digits=3,
+        labels=model.classes_
+    ))
+
+
+def main(printer=print, reader=input):
+    test(load(auto_train=True, save_retrained_model=True, printer=printer, reader=reader),
+         data=pickle.load(open(TEST_DATA_FILE, 'rb')),
+         printer=printer)
 
 
 if __name__ == '__main__':
